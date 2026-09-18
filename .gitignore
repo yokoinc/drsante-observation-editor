@@ -1,0 +1,9 @@
+# Exports de fiches et données de cabinet : jamais dans le dépôt
+*.xml
+!docs/**/*.xml
+/Nouvelles fiches/
+/OBSERV/
+
+# Windows
+Thumbs.db
+desktop.ini

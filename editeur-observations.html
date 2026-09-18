@@ -1,0 +1,1276 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Éditeur d'observations DrSanté</title>
+<style>
+  :root{
+    --bg:#eef1f4; --panel:#fff; --ink:#12212e; --ink2:#4a5c6b; --ink3:#8193a0;
+    --line:#d9e0e6; --line2:#eef2f5; --accent:#0f6f8c; --accent-soft:#e4f1f5;
+    --sel:#0f6f8c; --danger:#a32b2b; --warn:#8a5a00; --warn-soft:#fdf3e0;
+    --r:6px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);overflow:hidden;
+    font:13.5px/1.45 "Segoe UI",system-ui,sans-serif}
+  h1{margin:0;font-size:14px;font-weight:600}
+
+  .app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+  .bar{background:var(--panel);border-bottom:1px solid var(--line);
+    padding:8px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .bar .sp{flex:1}
+  .bar .doc{display:flex;gap:8px;align-items:center}
+  .bar input.t{border:1px solid var(--line);border-radius:5px;padding:5px 8px;font:inherit}
+  button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    border-radius:var(--r);padding:6px 11px;cursor:pointer}
+  button:hover{background:var(--line2)}
+  button.p{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button.p:hover{filter:brightness(1.08)}
+  button.mini{padding:2px 8px;font-size:12px}
+  button.del{color:var(--danger);border-color:transparent;background:transparent}
+  button.del:hover{background:#fbeaea}
+  button:disabled{opacity:.45;cursor:not-allowed}
+
+  .main{display:grid;grid-template-columns:1fr 330px;min-height:0}
+  .canvas-wrap{overflow:auto;padding:18px}
+  .sheet{background:#fff;border:1px solid var(--line);border-radius:8px;
+    padding:14px;min-width:900px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+
+  /* ---------- grille ---------- */
+  .grid{position:relative;display:grid;gap:2px}
+  .cell{background:#fafcfd;border:1px dashed #e3eaef;border-radius:3px;min-height:26px;cursor:cell}
+  .cell:hover{background:var(--accent-soft);border-color:var(--accent)}
+  .fld{position:relative;border:1px solid var(--line);border-radius:4px;background:#fff;
+    padding:3px 6px;overflow:hidden;cursor:grab;user-select:none;
+    display:flex;flex-direction:column;justify-content:center;min-width:0}
+  .fld:hover{border-color:var(--accent)}
+  .fld.sel{outline:2px solid var(--sel);outline-offset:1px;border-color:var(--sel);z-index:3}
+  .fld.drag{opacity:.65;cursor:grabbing;z-index:5}
+  .fld .ft{font-size:9.5px;letter-spacing:.04em;color:var(--ink3);text-transform:uppercase;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fld .fl{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fld .opts{font-size:10.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fld .hdl{position:absolute;right:0;bottom:0;width:11px;height:11px;cursor:nwse-resize;
+    background:linear-gradient(135deg,transparent 50%,var(--accent) 50%);border-radius:0 0 4px 0}
+  /* teintes par famille de champ */
+  .t-label{background:#f6f8f9}
+  .t-choice{background:#eef7fb;border-color:#c8e2ee}
+  .t-input{background:#f2f9f3;border-color:#cfe6d4}
+  .t-num{background:#fdf6ec;border-color:#ecdcc2}
+  .t-sys{background:#f4f2f8;border-color:#ded8ea}
+  /* mesures dont le nom ne correspond pas à la base */
+  .m-absente{border:2px solid #c0392b !important;background:#fdecea !important}
+  .m-verifier{border:2px solid #d68910 !important;background:#fef5e7 !important}
+  /* mode « ordre de tabulation » */
+  .fld .rang{position:absolute;top:2px;right:3px;background:var(--ink3);color:#fff;border-radius:9px;
+    font-size:10.5px;font-weight:700;padding:0 6px;line-height:16px;font-variant-numeric:tabular-nums}
+  .fld .rang.fait{background:var(--accent)}
+  .mode-tab .fld{cursor:pointer}
+  .mode-tab .cell{cursor:default}
+  .mode-tab .cell:hover{background:#fafcfd;border-color:#e3eaef}
+  button.actif{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+  .liste-mesures div{cursor:pointer;padding:5px 7px;border-radius:4px;margin-bottom:4px;font-size:12px}
+  .liste-mesures div:hover{background:var(--line2)}
+
+  /* ---------- panneau ---------- */
+  .side{background:var(--panel);border-left:1px solid var(--line);overflow:auto;padding:14px}
+  .side h2{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink2);
+    margin:0 0 9px;font-weight:700}
+  .side section{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line2)}
+  .side section:last-child{border:0}
+  label{display:block;font-size:11.5px;font-weight:600;color:var(--ink2);margin:0 0 3px}
+  .f{margin-bottom:9px}
+  input[type=text],textarea,select{width:100%;font:inherit;padding:5px 7px;border:1px solid var(--line);
+    border-radius:5px;background:#fff;color:var(--ink)}
+  input:focus,textarea:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  textarea{resize:vertical;min-height:46px}
+  .row4{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .opt{display:grid;grid-template-columns:1fr 58px auto;gap:5px;margin-bottom:4px;align-items:center}
+  .opt input{padding:4px 6px}
+  .hint{font-size:11px;color:var(--ink3);margin-top:3px;line-height:1.4}
+  .var{font:11px ui-monospace,Consolas,monospace;color:var(--accent);background:var(--accent-soft);
+    border-radius:3px;padding:2px 5px;display:inline-block;word-break:break-all}
+  .empty{color:var(--ink3);font-size:12.5px;text-align:center;padding:24px 8px}
+  .note{background:var(--warn-soft);color:var(--warn);border-radius:5px;padding:8px 10px;
+    font-size:12px;margin-bottom:12px;line-height:1.45}
+  .stats{font-size:11.5px;color:var(--ink2);display:flex;gap:14px;flex-wrap:wrap}
+  .stats b{color:var(--ink);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="bar">
+    <h1>Éditeur d'observations</h1>
+    <div class="doc">
+      <input class="t" id="dLabel" placeholder="Libellé du formulaire" style="width:250px">
+      <input class="t" id="dName" placeholder="NomTechnique" style="width:130px" title="Nom technique : il compose les variables d'impression {ChampNomObservation}">
+      <input class="t" id="dAuthor" placeholder="Auteur" style="width:150px">
+    </div>
+    <span id="msg" style="font-size:12px;color:var(--accent);max-width:320px"></span>
+    <div class="sp"></div>
+    <div class="stats" id="stats"></div>
+    <button id="bAdd">+ Champ</button>
+    <button id="bTab" title="Dans DrSanté, la touche Tab suit le numéro des champs, pas leur place à l'écran">Ordre Tab</button>
+    <button id="bNew">Nouveau</button>
+    <button id="bImp">Importer…</button>
+    <button id="bDup" title="Nouveaux identifiants et numéro de version suivant : l'import dans DrSanté ne remplacera pas l'original">Nouvelle version</button>
+    <button class="p" id="bExp">Exporter le XML</button>
+    <input type="file" id="file" accept=".xml" hidden>
+  </div>
+
+  <div class="main">
+    <div class="canvas-wrap">
+      <div class="sheet">
+        <div class="grid" id="grid"></div>
+      </div>
+    </div>
+    <div class="side" id="side"></div>
+  </div>
+
+</div>
+
+<datalist id="listeMesures"></datalist>
+
+<dialog id="dlgLib" style="border:1px solid var(--line);border-radius:8px;padding:16px;width:min(560px,92vw)">
+  <h2 style="font-size:14px;margin:0 0 6px">Bibliothèque de mesures</h2>
+  <div class="hint" style="margin-bottom:8px">
+    Colle le résultat de la requête SSMS, tel quel : <b>mode grille</b> (Ctrl+A, Ctrl+C dans le tableau) ou
+    <b>mode texte</b> (avec la ligne d'en-tête et les tirets). Colonnes : nom, unité, et facultativement
+    utilisations, sur 12 mois, dernière date. Le mode grille conserve seul les espaces en fin de nom.
+  </div>
+  <textarea id="libTexte" style="width:100%;min-height:220px;font:12px ui-monospace,Consolas,monospace"
+    placeholder="HbA1c	%&#10;CREATININE µmol/l	µmol/l"></textarea>
+  <div class="hint" id="libInfo" style="margin:6px 0 10px"></div>
+  <div style="display:flex;gap:8px;justify-content:flex-end">
+    <button id="libFermer">Annuler</button>
+    <button id="libRemplacer">Remplacer la bibliothèque</button>
+    <button class="p" id="libAjouter">Ajouter à la bibliothèque</button>
+  </div>
+</dialog>
+
+<!-- Mesures actives de dbo.MAGNITUDE (DeletionDate IS NULL), relevées dans la base
+     DrSanté le 13/09/2026 : nom <TAB> unité. Source : sortie texte de SSMS, qui
+     ne conserve pas les espaces en fin de nom — recoller depuis SSMS en mode
+     grille (Ctrl+D) pour une copie exacte. -->
+<!-- Liste de mesures de démarrage : volontairement vide. Chaque cabinet colle
+     la sienne (bouton « Coller la liste de la base… ») ; elle reste dans son
+     navigateur. La requête est dans docs/sql/mesures-et-fiches.sql. -->
+<script id="mesures-base" type="text/plain"></script>
+
+<script>
+"use strict";
+
+/* ==========================================================================
+   Modèle — on conserve les champs tels qu'ils sont dans le fichier.
+
+   Chaque champ garde la liste ordonnée de ses éléments XML d'origine : à
+   l'export on réécrit dans le même ordre, avec les valeurs mises à jour.
+   Conséquence : les types de champs que cet éditeur ne sait pas représenter
+   finement (MEASURESBLOCK, IMAGE_PAINT…) traversent l'outil sans être abîmés.
+   ========================================================================== */
+
+const NULL_GUID = "00000000-0000-0000-0000-000000000000";
+const COLS = ["2*", ...Array(6).fill("8*"), "2*", ...Array(6).fill("8*")];   // 14 colonnes
+
+/** Ordre canonique des éléments d'un champ, tel qu'observé dans les exports. */
+const ORDRE = ["Name","Identifier","BackupIdentifier","ExportDate","TypeValue","FieldNum",
+  "FieldType","Label","XLocation","YLocation","Width","Height","Comment","MacroDescription",
+  "IsMacroable","VAlign","HAlign","Orientation","Formula"];
+
+const TYPES = [
+  ["READONLY_LABEL","Libellé fixe","t-label"],
+  ["RADIOGROUP","Question à choix unique","t-choice"],
+  ["CHECKBOX","Case à cocher","t-choice"],
+  ["GENERICCHOICE","Liste de choix","t-choice"],
+  ["SIMPLETEXT","Texte court","t-input"],
+  ["MULTILINETEXT","Texte libre","t-input"],
+  ["DATE","Date","t-input"],
+  ["NUMERICBOX","Nombre ou score","t-num"],
+  ["MEASURE","Mesure biologique","t-num"],
+  ["MEASURESBLOCK","Bloc de mesures","t-num"],
+  ["USERCHOICE","Auteur","t-sys"],
+  ["READONLY_PATIENTNAME","Nom du patient","t-sys"],
+  ["READONLY_ICON","Icône","t-sys"],
+  ["CODIFIEDDISEASETEXT","Pathologie codée","t-input"],
+  ["PLACECHOICE","Lieu","t-input"],
+  ["IMAGE_PAINT","Image annotable","t-sys"]
+];
+const AVEC_OPTIONS = new Set(["RADIOGROUP","CHECKBOX","GENERICCHOICE"]);
+const STYLES = ["", "Titre 1", "Titre 2", "Autre"];
+
+/* ==========================================================================
+   Bibliothèque de mesures biologiques
+
+   Les mesures sont définies dans la base DrSanté du cabinet. La liste se colle
+   depuis SSMS (copie du résultat d'une requête : colonnes séparées par des
+   tabulations) ou au format « nom|unité ». Elle s'enrichit aussi de chaque
+   mesure rencontrée à l'import. Conservée dans ce navigateur.
+   ========================================================================== */
+
+// v2 : la bibliothèque par défaut est la liste réelle de la base (mesures
+// actives de dbo.MAGNITUDE, relevée le 13/09/2026), intégrée plus bas dans le
+// bloc #mesures-base — et non plus les 15 mesures des anciens formulaires.
+// Le changement de clé écarte l'ancienne liste mémorisée dans le navigateur.
+const CLE_MESURES = "drsante.editeur.mesures.v2";
+let _depart = null;
+function mesuresDepart(){
+  if(!_depart){
+    const bloc = document.getElementById("mesures-base");
+    _depart = bloc ? lisListeCollee(bloc.textContent) : [];
+  }
+  return _depart.map(m => ({...m}));
+}
+
+function chargeMesures(){
+  try { const r = localStorage.getItem(CLE_MESURES); if(r) return JSON.parse(r); } catch(e){}
+  return mesuresDepart();
+}
+function sauveMesures(l){ try { localStorage.setItem(CLE_MESURES, JSON.stringify(l)); } catch(e){} }
+
+/** « base » une fois la liste de la base collée : elle fait alors autorité, et
+    l'import d'un vieux formulaire ne doit plus y réinjecter des mesures
+    supprimées ou renommées depuis — sinon l'alerte « absente » ne sert plus. */
+function sourceMesures(){ try { return localStorage.getItem(CLE_MESURES + ".source") || "base"; } catch(e){ return "base"; } }
+function marqueSourceBase(){ try { localStorage.setItem(CLE_MESURES + ".source", "base"); } catch(e){} }
+
+/** Ajoute sans doublon, et met à jour les statistiques d'usage des mesures déjà
+    présentes. Renvoie le nombre de nouvelles mesures. */
+function ajouteMesures(nouvelles){
+  const l = chargeMesures(); let n = 0, maj = false;
+  for(const m of nouvelles){
+    if(!m.nom) continue;
+    // Une mesure = un couple nom + unité : « Acide urique » existe en µmol/l ET en mg/L.
+    const e = l.find(x => x.nom === m.nom && (x.unite||"") === (m.unite||""));
+    if(!e){ l.push({...m, unite: m.unite || ""}); n++; maj = true; }
+    else if(m.n !== undefined){ e.n = m.n; e.n12 = m.n12; e.derniere = m.derniere; maj = true; }
+  }
+  if(maj) sauveMesures(l);
+  return n;
+}
+
+/** « 3 412 utilisations · 1 820 sur 12 mois · dernière le 10/09/2026 » */
+function fmtUsage(m){
+  if(m.n === undefined) return "";
+  if(!m.n) return "jamais utilisée";
+  const d = m.derniere ? m.derniere.split("-").reverse().join("/") : "";
+  return `${m.n.toLocaleString("fr-FR")} utilisation${m.n > 1 ? "s" : ""}` +
+    (m.n12 !== undefined ? ` · ${m.n12.toLocaleString("fr-FR")} sur 12 mois` : "") +
+    (d ? ` · dernière le ${d}` : "");
+}
+
+/** Colle depuis SSMS (tabulations) ou au format nom|unité, une mesure par ligne. */
+const nombreCellule = s => { const v = parseInt(String(s || "").replace(/\s/g, ""), 10); return isNaN(v) ? undefined : v; };
+const dateCellule = s => { const t = String(s || "").trim(); return /^\d{4}-\d{2}-\d{2}/.test(t) ? t.slice(0, 10) : ""; };
+
+/**
+ * Sortie « Résultats en texte » de SSMS : colonnes de largeur fixe, dont la
+ * ligne de tirets sous l'en-tête donne les bornes exactes. Limite propre à ce
+ * format : les espaces en fin de nom se confondent avec le bourrage et sont
+ * perdus — le mode grille (Ctrl+D) reste la copie exacte.
+ */
+function lisSortieTexteSsms(lignes, iTirets){
+  const cols = [];
+  const re = /-+/g; let m;
+  while((m = re.exec(lignes[iTirets]))) cols.push([m.index, m.index + m[0].length]);
+  const cell = (l, k) => cols[k] ? l.slice(cols[k][0], cols[k][1]) : "";
+  const res = [];
+  for(let i = iTirets + 1; i < lignes.length; i++){
+    const l = lignes[i];
+    if(!l.trim()) continue;
+    if(/^(\(\d+ ligne|\(\d+ row|avertissement|warning|heure de fin|completion time|msg \d)/i.test(l.trim())) continue;
+    const e = { nom: cell(l, 0).replace(/\s+$/, ""), unite: cell(l, 1).trim() };
+    if(cols.length > 2){ e.n = nombreCellule(cell(l, 2)); e.n12 = nombreCellule(cell(l, 3)); e.derniere = dateCellule(cell(l, 4)); }
+    if(e.nom.trim()) res.push(e);
+  }
+  return res;
+}
+
+function lisListeCollee(texte){
+  const brutes = texte.split(/\r?\n/);
+  const iTirets = brutes.findIndex(l => /^-{2,}( +-{2,})+\s*$/.test(l));
+  if(iTirets >= 0) return fusionnePaires(lisSortieTexteSsms(brutes, iTirets));
+
+  const nombre = nombreCellule, date = dateCellule;
+  const lignes = brutes.filter(l => l.trim()).map(l => {
+    let p, nom;
+    if(l.includes("\t")){
+      // Copie depuis SSMS : le nom est gardé À L'IDENTIQUE, espaces compris.
+      // DrSanté lie la mesure par son libellé exact (« Hémoglobine » existe avec
+      // une espace finale dans la base) : le rogner casserait le lien.
+      p = l.split("\t"); nom = p[0];
+    } else {
+      p = l.split("|"); nom = (p[0] || "").trim();
+    }
+    const m = { nom, unite: (p[1] || "").trim() };
+    // Colonnes facultatives : utilisations, sur 12 mois, dernière date.
+    if(p.length > 2){ m.n = nombre(p[2]); m.n12 = nombre(p[3]); m.derniere = date(p[4]); }
+    return m;
+  }).filter(m => m.nom.trim() && !/^(nom|libelle|libellé|name)$/i.test(m.nom.trim()));
+  return fusionnePaires(lignes);
+}
+
+/** Même nom et même unité sous deux identifiants de la base : on cumule. */
+function fusionnePaires(liste){
+  const par = new Map();
+  for(const m of liste){
+    const k = m.nom + "|" + (m.unite || "");
+    const e = par.get(k);
+    if(!e){ par.set(k, {...m}); continue; }
+    if(m.n !== undefined) e.n = (e.n || 0) + m.n;
+    if(m.n12 !== undefined) e.n12 = (e.n12 || 0) + m.n12;
+    if(m.derniere && (!e.derniere || m.derniere > e.derniere)) e.derniere = m.derniere;
+  }
+  return [...par.values()];
+}
+
+function majListeMesures(){
+  const dl = $("listeMesures"); if(!dl) return;
+  // La valeur porte le couple « nom|unité » : c'est ce qui permet de choisir
+  // entre deux mesures de même nom. Le « | » ne peut pas apparaître dans un nom
+  // (c'est déjà le séparateur du champ Comment de DrSanté).
+  // Les plus utilisées d'abord : c'est l'ordre dans lequel la liste les propose.
+  const l = chargeMesures().slice().sort((a, b) => (b.n ?? -1) - (a.n ?? -1));
+  dl.innerHTML = l.map(m =>
+    `<option value="${esc(m.nom + "|" + (m.unite||"")).replace(/"/g,"&quot;")}">${esc((m.unite || "sans unité") + (m.n !== undefined ? " — " + fmtUsage(m) : ""))}</option>`).join("");
+}
+
+let doc_ = vide();
+let sel = null;                 // index du champ sélectionné
+
+/* ---- Habitudes de l'utilisateur -----------------------------------------
+   L'auteur et le début du libellé (souvent le nom du cabinet) se répètent
+   d'une fiche à l'autre. On les retient depuis les fiches réelles, dans ce
+   navigateur : rien n'est écrit en dur dans l'outil. */
+const CLE_HABITUDES = "drsante.editeur.habitudes.v1";
+
+function habitudes(){
+  try { return JSON.parse(localStorage.getItem(CLE_HABITUDES)) || {}; } catch(e){ return {}; }
+}
+/** Préfixe = ce qui précède le premier séparateur « - » ou « · », tiret compris. */
+function retientHabitudes(label, auteur){
+  const m = String(label || "").match(/^(.{2,40}?\s[-·]\s)/);
+  const h = habitudes();
+  if(m) h.prefixe = m[1];
+  if(auteur) h.auteur = auteur;
+  try { localStorage.setItem(CLE_HABITUDES, JSON.stringify(h)); } catch(e){}
+}
+
+/* ---- Annuler / Rétablir -------------------------------------------------
+   On mémorise l'état AVANT chaque modification (début d'un glisser, clic
+   d'action, entrée dans un champ de saisie). Une frappe au clavier ne crée
+   pas une étape par caractère : c'est l'entrée dans le champ qui compte. */
+const pileAnnuler = [], pileRetablir = [];
+const LIMITE_HISTORIQUE = 100;
+
+function instantane(){
+  return JSON.stringify({ fields: doc_.fields, name: doc_.name, label: doc_.label, author: doc_.author });
+}
+function memorise(){
+  const e = instantane();
+  if(pileAnnuler[pileAnnuler.length-1] === e) return;
+  pileAnnuler.push(e);
+  if(pileAnnuler.length > LIMITE_HISTORIQUE) pileAnnuler.shift();
+  pileRetablir.length = 0;
+}
+function restaure(e){
+  const s = JSON.parse(e);
+  doc_.fields = s.fields; doc_.name = s.name; doc_.label = s.label; doc_.author = s.author;
+  sel = null; majEntete(); dessine(); panneau();
+}
+function annuler(){
+  const cur = instantane();
+  while(pileAnnuler.length && pileAnnuler[pileAnnuler.length-1] === cur) pileAnnuler.pop();
+  if(!pileAnnuler.length){ message("Rien à annuler."); return; }
+  pileRetablir.push(cur);
+  restaure(pileAnnuler.pop());
+}
+function retablir(){
+  if(!pileRetablir.length){ message("Rien à rétablir."); return; }
+  pileAnnuler.push(instantane());
+  restaure(pileRetablir.pop());
+}
+
+function vide(){
+  return {
+    name:"", label:"", author:"",
+    identifier:uuid(), backupIdentifier:uuid(),
+    formatNumber:"1", isPrintable:"false", isVisible:"true", newOrderHandling:"false",
+    xamlOrigine:null, lignesOrigine:0,
+    cols: COLS.slice(),           // largeurs de colonnes réelles du formulaire (9, 12 ou 14 observées)
+    identifiantsImportes:false,   // vrai tant qu'on garde les GUID d'un fichier importé
+    fields:[], avertissements:[]
+  };
+}
+
+function uuid(){
+  const b = new Uint8Array(16); crypto.getRandomValues(b);
+  b[6]=(b[6]&0x0f)|0x40; b[8]=(b[8]&0x3f)|0x80;
+  const h=[...b].map(x=>x.toString(16).padStart(2,"0")).join("");
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+const get = (f,k) => { const e = f.el.find(x=>x.k===k); return e ? e.v : undefined; };
+const set_ = (f,k,v) => {
+  const e = f.el.find(x=>x.k===k);
+  if(e){ e.v = v; return; }
+  const pos = ORDRE.indexOf(k);
+  let i = f.el.length;
+  for(let j=0;j<f.el.length;j++){ if(ORDRE.indexOf(f.el[j].k) > pos){ i=j; break; } }
+  f.el.splice(i,0,{k,v});
+};
+const del_ = (f,k) => { const i = f.el.findIndex(x=>x.k===k); if(i>=0) f.el.splice(i,1); };
+const num = (f,k) => parseInt(get(f,k)||"0",10) || 0;
+
+/** Construit un champ dans l'ordre canonique des éléments. */
+function creeChamp(p){
+  const f = { el: [] };
+  ORDRE.forEach(k => { if(!["Label","Comment","MacroDescription","Formula"].includes(k)) f.el.push({k,v:""}); });
+  set_(f,"Name", p.name);
+  set_(f,"Identifier",NULL_GUID); set_(f,"BackupIdentifier",NULL_GUID);
+  set_(f,"ExportDate","0001-01-01T00:00:00"); set_(f,"TypeValue","0");
+  set_(f,"FieldType", p.type);
+  if(p.label !== undefined) set_(f,"Label", p.label);
+  set_(f,"XLocation",String(p.x)); set_(f,"YLocation",String(p.y));
+  set_(f,"Width",String(p.w)); set_(f,"Height",String(p.h));
+  if(p.comment !== undefined) set_(f,"Comment", p.comment);
+  set_(f,"IsMacroable", p.macro ? "true" : "false");
+  set_(f,"VAlign",String(p.va)); set_(f,"HAlign",String(p.ha)); set_(f,"Orientation","0");
+  return f;
+}
+
+function champNeuf(x,y){
+  return creeChamp({ name:nomLibre(), type:"READONLY_LABEL", label:"Nouveau champ",
+    x, y, w:Math.min(6, doc_.cols.length - x), h:1, macro:false, va:1, ha:3 });
+}
+
+/** En-tête commun à tes 40 formulaires : positions relevées sur les originaux. */
+function enTeteStandard(){
+  return [
+    creeChamp({ name:"champ_001", type:"READONLY_ICON", x:1, y:0, w:1, h:2,
+      comment:"ObservationUserPathStyle", macro:false, va:1, ha:1 }),
+    creeChamp({ name:"champ_002", type:"READONLY_PATIENTNAME", x:2, y:0, w:4, h:2, macro:false, va:1, ha:3 }),
+    creeChamp({ name:"Date", type:"DATE", label:"Date", x:12, y:1, w:2, h:1, macro:true, va:1, ha:3 }),
+    creeChamp({ name:"champ_004", type:"USERCHOICE", label:"Auteur", x:12, y:0, w:2, h:1, macro:false, va:1, ha:3 }),
+    creeChamp({ name:"champ_005", type:"READONLY_LABEL", label:"TITRE DU FORMULAIRE", x:4, y:1, w:7, h:1,
+      comment:"Titre 1", macro:false, va:2, ha:1 })
+  ];
+}
+
+/** R3 → R4, Q09 → Q10 ; sinon un nom libre. Toujours unique. */
+function nomSuivant(nom){
+  const pris = new Set(doc_.fields.map(f=>get(f,"Name")));
+  const m = String(nom).match(/^(.*?)(\d+)$/);
+  if(m){
+    let n = parseInt(m[2],10);
+    for(let k=0;k<999;k++){
+      n++;
+      const cand = m[1] + String(n).padStart(m[2].length,"0");
+      if(!pris.has(cand)) return cand;
+    }
+  }
+  return nomLibre();
+}
+
+function dupliquerChamp(i){
+  if(i === null || !doc_.fields[i]) return;
+  memorise();
+  const src = doc_.fields[i];
+  const copie = JSON.parse(JSON.stringify(src));
+  set_(copie,"Name", nomSuivant(get(src,"Name")));
+  set_(copie,"YLocation", String(num(src,"YLocation") + Math.max(1,num(src,"Height"))));
+  doc_.fields.splice(i+1, 0, copie);
+  selectionner(i+1);
+  message(`« ${get(src,"Name")} » dupliqué en « ${get(copie,"Name")} », juste en dessous.`);
+}
+
+/* ---- Contrôles avant export ---------------------------------------------- */
+function controles(){
+  const pb = [];
+  if(!doc_.label.trim()) pb.push("Le libellé du formulaire est vide.");
+  if(!doc_.name.trim()) pb.push("Le nom technique du formulaire est vide.");
+  // Espaces, accents et tirets sont acceptés par DrSanté (« Dossier Infertilité2 »,
+  // « M-CHATv33 » fonctionnent). Seules les accolades cassent les variables d'impression.
+  else if(/[{}]/.test(doc_.name)) pb.push("Le nom technique ne doit pas contenir d'accolades : elles cassent les variables d'impression.");
+
+  const compte = new Map();
+  doc_.fields.forEach(f => { const n = get(f,"Name"); compte.set(n, (compte.get(n)||0) + 1); });
+  for(const [n,c] of compte) if(c > 1)
+    pb.push(`Nom de champ en double : « ${n} » (${c} fois). Formules et variables d'impression deviennent ambiguës.`);
+
+  doc_.fields.forEach(f => {
+    const fo = get(f,"Formula"); if(!fo) return;
+    for(const m of fo.matchAll(/\{([^}]+)\}/g))
+      if(!compte.has(m[1])) pb.push(`La formule de « ${get(f,"Name")} » cite {${m[1]}}, qui n'existe pas.`);
+  });
+  return pb;
+}
+
+function nomLibre(){
+  const pris = new Set(doc_.fields.map(f=>get(f,"Name")));
+  for(let i=1;i<999;i++){ const n = "champ_"+String(i).padStart(3,"0"); if(!pris.has(n)) return n; }
+  return "champ_"+Date.now();
+}
+
+/* ==========================================================================
+   Import
+   ========================================================================== */
+
+function importer(texte){
+  const x = new DOMParser().parseFromString(texte,"application/xml");
+  if(x.querySelector("parsererror")) throw new Error("XML illisible.");
+  const r = x.documentElement;
+  if(r.nodeName !== "ObservationFormatExport")
+    throw new Error(`Ce fichier n'est pas une observation (racine « ${r.nodeName} »).`);
+
+  const d = vide();
+  const t = n => r.querySelector(`:scope > ${n}`)?.textContent ?? "";
+  d.name = t("Name"); d.label = t("Label"); d.author = t("Author");
+  d.identifier = t("Identifier") || uuid();
+  d.backupIdentifier = t("BackupIdentifier") || uuid();
+  d.identifiantsImportes = !!t("Identifier");
+  d.formatNumber = t("FormatNumber") || "1";
+  d.isPrintable = t("IsPrintable") || "false";
+  d.isVisible = t("IsVisible") || "true";
+  d.newOrderHandling = t("NewOrderHandling") || "false";
+  d.xamlOrigine = t("ItemsPanelTemplateXaml") || null;
+  d.lignesOrigine = (d.xamlOrigine || "").split("<RowDefinition").length - 1;
+  // Le nombre de colonnes varie d'un formulaire à l'autre : on lit la grille réelle.
+  const largeurs = [...(d.xamlOrigine || "").matchAll(/<ColumnDefinition\s+Width="([^"]*)"/g)].map(m => m[1]);
+  if(largeurs.length) d.cols = largeurs;
+
+  d.fields = [...r.querySelectorAll("Fields > ObservationFormatFieldExport")].map(n => ({
+    el: [...n.children].map(c => ({ k: c.nodeName, v: c.textContent }))
+  }));
+
+  // Ordre des éléments racine. Tout ce que l'éditeur ne modélise pas — au
+  // premier chef le modèle d'impression embarqué (ObservationPrintTemplateExport,
+  // qui contient le .docx) — est recopié tel quel depuis le fichier source, à
+  // sa place d'origine. Rien ne doit disparaître parce que l'outil l'ignore.
+  d.rootOrder = [];
+  let curseur = 0;
+  for(const c of r.children){
+    if(CONNUS.has(c.nodeName)){ d.rootOrder.push({k:c.nodeName}); continue; }
+    const brut = extraitBrut(texte, c.nodeName, curseur);
+    if(brut){ d.rootOrder.push({k:c.nodeName, raw:brut.raw}); curseur = brut.fin; }
+  }
+  // Les mesures rencontrées enrichissent la bibliothèque, tant qu'elle ne vient
+  // pas de la base (qui, elle, fait autorité).
+  if(sourceMesures() !== "base") ajouteMesures(d.fields.filter(f => get(f,"FieldType") === "MEASURE").map(f => {
+    const [nom, unite] = (get(f,"Comment") || "").split("|");
+    return { nom: nom || "", unite: unite || "" };
+  }));
+
+  const conserves = d.rootOrder.filter(e=>e.raw).map(e=>e.k);
+  if(conserves.length) d.avertissements.push(
+    `Blocs conservés tels quels, non modifiables ici : ${[...new Set(conserves)].join(", ")}.`);
+  return d;
+}
+
+const CONNUS = new Set(["Name","Author","Identifier","BackupIdentifier","ExportDate","TypeValue",
+  "Label","ItemsPanelTemplateXaml","Fields","FormatNumber","IsPrintable","IsVisible",
+  "NewOrderHandling","MaxIteration"]);
+
+/** Retrouve le texte exact d'un élément dans le fichier source. */
+function extraitBrut(src, tag, depuis){
+  let i = src.indexOf("<"+tag, depuis);
+  while(i >= 0){
+    const c = src[i + 1 + tag.length];
+    if(c === ">" || c === " " || c === "/" || c === "\r" || c === "\n" || c === "\t") break;
+    i = src.indexOf("<"+tag, i+1);
+  }
+  if(i < 0) return null;
+  const gt = src.indexOf(">", i);
+  if(gt < 0) return null;
+  if(src[gt-1] === "/") return { raw: src.slice(i, gt+1), fin: gt+1 };
+  const close = "</"+tag+">";
+  const j = src.indexOf(close, gt);
+  if(j < 0) return null;
+  return { raw: src.slice(i, j + close.length), fin: j + close.length };
+
+  const inconnus = [...new Set(d.fields.map(f=>get(f,"FieldType")).filter(t => !TYPES.some(x=>x[0]===t)))];
+  if(inconnus.length) d.avertissements.push(
+    `Types de champs non représentés : ${inconnus.join(", ")}. Ils sont conservés tels quels à l'export.`);
+  return d;
+}
+
+/* ==========================================================================
+   Export
+   ========================================================================== */
+
+/* Le sérialiseur .NET n'échappe QUE & < > dans le texte d'un élément : ni les
+   apostrophes, ni les guillemets. Échapper davantage produirait des fichiers
+   valides mais différents de ceux de DrSanté, octet pour octet. */
+const esc = s => String(s??"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+function dateExport(d=new Date()){
+  const p=(n,l=2)=>String(n).padStart(l,"0");
+  const o=-d.getTimezoneOffset(), s=o>=0?"+":"-";
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(),3)}0000${s}${p(Math.floor(Math.abs(o)/60))}:${p(Math.abs(o)%60)}`;
+}
+
+function nbLignes(){
+  return Math.max(1, ...doc_.fields.map(f => num(f,"YLocation") + num(f,"Height")));
+}
+
+function xaml(){
+  const lignes = nbLignes();
+  // On garde la grille d'origine tant qu'elle est assez grande : des lignes en
+  // trop sont sans effet, alors qu'en régénérer une ferait diverger le fichier.
+  // Les sauts de ligne sont réécrits en CRLF : tout lecteur XML les normalise
+  // en LF à la lecture, alors que DrSanté les écrit en CRLF.
+  if(doc_.xamlOrigine && doc_.lignesOrigine >= lignes) return crlf(doc_.xamlOrigine);
+  return [
+    `<ItemsPanelTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>`,
+    `<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">`,
+    `<Grid.ColumnDefinitions>`,
+    ...doc_.cols.map(w=>`<ColumnDefinition Width="${w}" />`),
+    `</Grid.ColumnDefinitions>`,
+    `<Grid.RowDefinitions>`,
+    ...Array.from({length:lignes},()=>`<RowDefinition Height="Auto" />`),
+    `</Grid.RowDefinitions>`,
+    `</Grid>`,
+    `</ItemsPanelTemplate>`
+  ].join("\r\n");
+}
+
+const crlf = s => s.replace(/\r?\n/g, "\r\n");
+
+const ORDRE_RACINE = ["Name","Author","Identifier","BackupIdentifier","ExportDate","TypeValue",
+  "Label","ItemsPanelTemplateXaml","Fields","FormatNumber","IsPrintable","IsVisible",
+  "NewOrderHandling","MaxIteration"];
+
+function elementRacine(k){
+  switch(k){
+    case "Name": return `<Name>${esc(doc_.name)}</Name>`;
+    case "Author": return `<Author>${esc(doc_.author)}</Author>`;
+    case "Identifier": return `<Identifier>${doc_.identifier}</Identifier>`;
+    case "BackupIdentifier": return `<BackupIdentifier>${doc_.backupIdentifier}</BackupIdentifier>`;
+    case "ExportDate": return `<ExportDate>${dateExport()}</ExportDate>`;
+    case "TypeValue": return `<TypeValue>TEMPLATE_CUSTOBS</TypeValue>`;
+    case "Label": return `<Label>${esc(doc_.label)}</Label>`;
+    case "ItemsPanelTemplateXaml": return `<ItemsPanelTemplateXaml>${esc(xaml())}</ItemsPanelTemplateXaml>`;
+    case "FormatNumber": return `<FormatNumber>${esc(doc_.formatNumber)}</FormatNumber>`;
+    case "IsPrintable": return `<IsPrintable>${esc(doc_.isPrintable)}</IsPrintable>`;
+    case "IsVisible": return `<IsVisible>${esc(doc_.isVisible)}</IsVisible>`;
+    case "NewOrderHandling": return `<NewOrderHandling>${esc(doc_.newOrderHandling)}</NewOrderHandling>`;
+    case "MaxIteration": return `<MaxIteration xsi:nil="true" />`;
+    case "Fields": {
+      const p = [`<Fields>`];
+      doc_.fields.forEach((f,i) => {
+        set_(f,"FieldNum",String(i));
+        p.push(`<ObservationFormatFieldExport>`);
+        // Un élément vide s'écrit en balise auto-fermante, comme le fait .NET.
+        f.el.forEach(e => p.push(e.v === "" ? `<${e.k} />` : `<${e.k}>${esc(crlf(e.v))}</${e.k}>`));
+        p.push(`</ObservationFormatFieldExport>`);
+      });
+      p.push(`</Fields>`);
+      return p.join("");
+    }
+    default: return "";
+  }
+}
+
+function versXml(){
+  const p = [];
+  p.push(`<?xml version="1.0" encoding="utf-8"?>`);
+  p.push(`<ObservationFormatExport xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">`);
+  const plan = (doc_.rootOrder && doc_.rootOrder.length)
+    ? doc_.rootOrder
+    : ORDRE_RACINE.map(k => ({k}));
+  plan.forEach(e => p.push(e.raw !== undefined ? e.raw : elementRacine(e.k)));
+  p.push(`</ObservationFormatExport>`);
+  return p.join("");
+}
+
+/* ==========================================================================
+   Options « Libellé     {score} » séparées par |
+   ========================================================================== */
+
+const litOptions = c => !c ? [] : c.split("|").map(p=>{
+  const m = p.match(/^(.*?)\s*\{([^}]*)\}\s*$/);
+  return m ? {l:m[1].trim(), v:m[2].trim()} : {l:p.trim(), v:""};
+}).filter(o=>o.l!=="" || o.v!=="");
+const ecritOptions = o => o.map(x=>`${x.l}     {${x.v}}`).join("|");
+
+/* ==========================================================================
+   Rendu de la grille
+   ========================================================================== */
+
+const $ = id => document.getElementById(id);
+const grid = $("grid");
+let cellules = [];
+
+/** Largeur XAML → CSS : « 8* » → 8fr, « * » → 1fr, « 120 » → 120px, « Auto » → auto. */
+function largeurCss(w){
+  const s = String(w).trim();
+  if(/^auto$/i.test(s)) return "minmax(40px, auto)";
+  if(s === "*") return "1fr";
+  if(/^\d+(\.\d+)?\*$/.test(s)) return s.slice(0,-1) + "fr";
+  if(/^\d+(\.\d+)?$/.test(s)) return s + "px";
+  return "1fr";
+}
+
+/** « exacte » | « verifier » (même nom à la casse, aux espaces ou à l'unité près) | « absente » */
+function statutMesure(comment){
+  const [nom = "", unite = ""] = String(comment || "").split("|");
+  if(!nom.trim()) return "absente";
+  const l = chargeMesures();
+  // Bibliothèque vide : rien à comparer, on ne signale rien.
+  if(!l.length) return "exacte";
+  if(l.some(m => m.nom === nom && (m.unite || "") === unite)) return "exacte";
+  const cle = s => s.trim().toLowerCase();
+  if(l.some(m => cle(m.nom) === cle(nom))) return "verifier";
+  return "absente";
+}
+
+function classeType(t){ const e = TYPES.find(x=>x[0]===t); return e ? e[2] : "t-sys"; }
+function libelleType(t){ const e = TYPES.find(x=>x[0]===t); return e ? e[1] : t; }
+
+function dessine(){
+  // Toujours de la place sous le contenu, pour poser ou descendre un champ.
+  // Ces lignes vides ne sont pas exportées : seule compte la position des champs.
+  const lignes = Math.max(nbLignes() + 8, 24);
+  grid.style.gridTemplateColumns = doc_.cols.map(largeurCss).join(" ");
+  grid.style.gridTemplateRows = `repeat(${lignes}, minmax(26px, auto))`;
+  grid.innerHTML = "";
+  cellules = [];
+
+  for(let y=0;y<lignes;y++) for(let x=0;x<doc_.cols.length;x++){
+    const c = document.createElement("div");
+    c.className = "cell"; c.style.gridColumn = (x+1); c.style.gridRow = (y+1);
+    c.dataset.x = x; c.dataset.y = y;
+    c.title = "Ajouter un champ ici";
+    c.addEventListener("click", () => { if(!modeTab.actif) ajouter(x,y); });
+    grid.appendChild(c); cellules.push(c);
+  }
+
+  doc_.fields.forEach((f,i) => grid.appendChild(bloc(f,i)));
+  grid.classList.toggle("mode-tab", modeTab.actif);
+  $("bTab").classList.toggle("actif", modeTab.actif);
+  majStats();
+}
+
+function bloc(f,i){
+  const t = get(f,"FieldType");
+  const d = document.createElement("div");
+  const alerte = t === "MEASURE" ? statutMesure(get(f,"Comment")) : "exacte";
+  d.className = `fld ${classeType(t)}` + (i===sel ? " sel" : "") +
+    (alerte === "absente" ? " m-absente" : alerte === "verifier" ? " m-verifier" : "");
+  d.style.gridColumn = `${num(f,"XLocation")+1} / span ${Math.max(1,num(f,"Width"))}`;
+  d.style.gridRow = `${num(f,"YLocation")+1} / span ${Math.max(1,num(f,"Height"))}`;
+  d.dataset.i = i;
+
+  const lab = get(f,"Label") || "";
+  const com = get(f,"Comment") || "";
+  let bas = "";
+  if(AVEC_OPTIONS.has(t)) bas = litOptions(com).map(o=>`${o.l} (${o.v})`).join("  ·  ");
+  else if(t === "MEASURE") bas = com.replace("|", "  ·  ");
+  else if(get(f,"Formula")) bas = get(f,"Formula");
+
+  d.innerHTML =
+    `<div class="ft">${esc(libelleType(t))}</div>` +
+    (lab ? `<div class="fl">${esc(lab)}</div>` : "") +
+    (bas ? `<div class="opts">${esc(bas)}</div>` : "") +
+    (modeTab.actif
+      ? `<div class="rang${i <= modeTab.dernier ? " fait" : ""}">${i+1}</div>`
+      : `<div class="hdl" title="Redimensionner"></div>`);
+
+  if(modeTab.actif) d.addEventListener("click", e => { e.stopPropagation(); placeEnSuivant(i); });
+  else d.addEventListener("pointerdown", e => debutGeste(e, i, d));
+  return d;
+}
+
+/* ==========================================================================
+   Ordre de tabulation
+   Vérifié le 13/09 dans DrSanté : Tab suit le numéro des champs (FieldNum,
+   donc leur ordre dans la liste), pas leur position à l'écran. Ce numéro est
+   l'ordre de création : un champ ajouté après coup en haut de la fiche reçoit
+   le curseur en dernier. Ce mode permet de le remettre dans l'ordre voulu.
+   ========================================================================== */
+
+const modeTab = { actif:false, dernier:-1 };   // dernier = rang du dernier champ cliqué
+
+function basculeModeTab(actif){
+  modeTab.actif = actif; modeTab.dernier = -1;
+  sel = null; dessine(); panneau();
+}
+
+/** Le champ cliqué passe juste après le précédent cliqué (ou en premier). */
+function placeEnSuivant(i){
+  memorise();
+  let cible = Math.min(modeTab.dernier + 1, doc_.fields.length - 1);
+  if(i < cible) cible--;            // champ déjà placé recliqué : la liste s'est décalée
+  const [f] = doc_.fields.splice(i, 1);
+  doc_.fields.splice(cible, 0, f);
+  modeTab.dernier = cible;
+  dessine(); panneau();
+}
+
+/** De haut en bas, puis de gauche à droite. */
+function rangeParLignes(){
+  memorise();
+  doc_.fields = doc_.fields.map((f,i)=>({f,i}))
+    .sort((a,b)=> num(a.f,"YLocation")-num(b.f,"YLocation") || num(a.f,"XLocation")-num(b.f,"XLocation") || a.i-b.i)
+    .map(x=>x.f);
+  modeTab.dernier = -1;
+  dessine(); panneau();
+  message("Champs renumérotés ligne par ligne.");
+}
+
+function majStats(){
+  const n = doc_.fields.length;
+  const q = doc_.fields.filter(f=>get(f,"FieldType")==="RADIOGROUP").length;
+  $("stats").innerHTML = `<span><b>${n}</b> champs</span><span><b>${q}</b> questions</span>` +
+    `<span><b>${nbLignes()}</b> lignes</span>`;
+}
+
+/* ==========================================================================
+   Déplacement et redimensionnement
+   ========================================================================== */
+
+let geste = null;
+
+function debutGeste(e, i, el){
+  e.preventDefault(); e.stopPropagation();
+  memorise();
+  selectionner(i);
+  const f = doc_.fields[i];
+  const rects = cellules.map(c => ({x:+c.dataset.x, y:+c.dataset.y, r:c.getBoundingClientRect()}));
+  const depart = cellSous(e.clientX, e.clientY, rects) || {x:num(f,"XLocation"), y:num(f,"YLocation")};
+  geste = {
+    i, el, rects, mode: e.target.classList.contains("hdl") ? "taille" : "place",
+    dx: depart.x - num(f,"XLocation"), dy: depart.y - num(f,"YLocation")
+  };
+  el.classList.add("drag");
+  el.setPointerCapture(e.pointerId);
+  el.addEventListener("pointermove", bouge);
+  el.addEventListener("pointerup", finGeste);
+  el.addEventListener("pointercancel", finGeste);
+}
+
+function cellSous(cx, cy, rects){
+  for(const c of rects) if(cx>=c.r.left && cx<=c.r.right && cy>=c.r.top && cy<=c.r.bottom) return c;
+  // hors grille : on retient la colonne/ligne la plus proche
+  let best=null, d=Infinity;
+  for(const c of rects){
+    const ddx = Math.max(c.r.left-cx, 0, cx-c.r.right);
+    const ddy = Math.max(c.r.top-cy, 0, cy-c.r.bottom);
+    const dd = ddx*ddx + ddy*ddy;
+    if(dd < d){ d = dd; best = c; }
+  }
+  return best;
+}
+
+function bouge(e){
+  if(!geste) return;
+  const c = cellSous(e.clientX, e.clientY, geste.rects);
+  if(!c) return;
+  const f = doc_.fields[geste.i];
+  if(geste.mode === "place"){
+    const nx = Math.max(0, Math.min(doc_.cols.length - num(f,"Width"), c.x - geste.dx));
+    const ny = Math.max(0, c.y - geste.dy);
+    if(nx !== num(f,"XLocation") || ny !== num(f,"YLocation")){
+      set_(f,"XLocation",String(nx)); set_(f,"YLocation",String(ny));
+      geste.el.style.gridColumn = `${nx+1} / span ${num(f,"Width")}`;
+      geste.el.style.gridRow = `${ny+1} / span ${num(f,"Height")}`;
+    }
+  } else {
+    const w = Math.max(1, Math.min(doc_.cols.length - num(f,"XLocation"), c.x - num(f,"XLocation") + 1));
+    const h = Math.max(1, c.y - num(f,"YLocation") + 1);
+    if(w !== num(f,"Width") || h !== num(f,"Height")){
+      set_(f,"Width",String(w)); set_(f,"Height",String(h));
+      geste.el.style.gridColumn = `${num(f,"XLocation")+1} / span ${w}`;
+      geste.el.style.gridRow = `${num(f,"YLocation")+1} / span ${h}`;
+    }
+  }
+}
+
+function finGeste(e){
+  if(!geste) return;
+  geste.el.classList.remove("drag");
+  geste.el.removeEventListener("pointermove", bouge);
+  geste.el.removeEventListener("pointerup", finGeste);
+  geste.el.removeEventListener("pointercancel", finGeste);
+  geste = null;
+  dessine(); panneau();
+}
+
+/* ==========================================================================
+   Panneau de propriétés
+   ========================================================================== */
+
+function selectionner(i){ sel = i; dessine(); panneau(); }
+
+function ajouter(x,y){
+  memorise();
+  doc_.fields.push(champNeuf(x,y));
+  selectionner(doc_.fields.length - 1);
+  document.querySelector("#side input")?.focus();
+}
+
+function panneau(){
+  const s = $("side");
+  s.innerHTML = "";
+
+  if(doc_.avertissements.length){
+    const n = document.createElement("div");
+    n.className = "note"; n.textContent = doc_.avertissements[0];
+    s.appendChild(n);
+  }
+
+  if(modeTab.actif){
+    const sc = document.createElement("section");
+    sc.innerHTML = `<h2>Ordre de tabulation</h2>
+      <div class="hint" style="margin-bottom:10px;font-size:12px;color:var(--ink2)">
+        Dans DrSanté, <b>Tab</b> passe au champ de numéro suivant, pas au champ voisin à l'écran.<br><br>
+        Clique les champs <b>dans l'ordre où tu veux que Tab les parcoure</b>. Chaque clic place le champ juste
+        après le précédent (en bleu). Les autres gardent leur ordre, à la suite.<br><br>
+        Les étiquettes et l'en-tête peuvent rester n'importe où.</div>`;
+    const b1 = document.createElement("button"); b1.textContent = "Recommencer au n° 1";
+    b1.addEventListener("click", ()=>{ modeTab.dernier = -1; dessine(); panneau(); });
+    const b2 = document.createElement("button"); b2.textContent = "Tout ranger ligne par ligne";
+    b2.title = "De haut en bas, puis de gauche à droite";
+    b2.addEventListener("click", rangeParLignes);
+    const b3 = document.createElement("button"); b3.className = "p"; b3.textContent = "Terminé";
+    b3.addEventListener("click", ()=> basculeModeTab(false));
+    const zone = document.createElement("div");
+    zone.style.cssText = "display:flex;flex-direction:column;gap:6px";
+    zone.append(b1, b2, b3);
+    sc.appendChild(zone);
+    s.appendChild(sc);
+    return;
+  }
+
+  if(sel === null || !doc_.fields[sel]){
+    s.insertAdjacentHTML("beforeend",
+      `<div class="empty">Clique un champ pour le modifier,<br>ou une case vide pour en ajouter un.<br><br>
+       Attrape un champ pour le déplacer,<br>son coin pour le redimensionner.<br><br>
+       <b>Ctrl+Z</b> annuler · <b>Ctrl+Y</b> rétablir<br><b>Ctrl+D</b> dupliquer · <b>Suppr</b> supprimer</div>`);
+    const aCorriger = doc_.fields.map((f, i) => ({ f, i }))
+      .filter(x => get(x.f, "FieldType") === "MEASURE")
+      .map(x => ({ ...x, statut: statutMesure(get(x.f, "Comment")) }))
+      .filter(x => x.statut !== "exacte");
+    if(aCorriger.length){
+      const sm = document.createElement("section");
+      sm.innerHTML = `<h2>Mesures à corriger (${aCorriger.length})</h2>
+        <div class="hint" style="margin-bottom:6px">Rouge : absente de la base. Orange : nom proche, à vérifier. Clique pour ouvrir.</div>`;
+      const liste = document.createElement("div"); liste.className = "liste-mesures";
+      aCorriger.forEach(x => {
+        const e = document.createElement("div");
+        e.style.borderLeft = `4px solid ${x.statut === "absente" ? "#c0392b" : "#d68910"}`;
+        e.textContent = (get(x.f, "Comment") || "(aucune mesure)").replace("|", " — ");
+        e.addEventListener("click", () => selectionner(x.i));
+        liste.appendChild(e);
+      });
+      sm.appendChild(liste);
+      s.appendChild(sm);
+    }
+
+    const pb = controles();
+    const c = document.createElement("section");
+    c.innerHTML = `<h2>Contrôles</h2>` + (pb.length
+      ? pb.map(p => `<div class="note" style="margin-bottom:6px">${esc(p)}</div>`).join("")
+      : `<div class="hint">✓ Aucun problème détecté.</div>`);
+    s.appendChild(c);
+    return;
+  }
+
+  const f = doc_.fields[sel];
+  const t = get(f,"FieldType");
+  const sec = (titre) => { const d=document.createElement("section");
+    d.innerHTML = `<h2>${titre}</h2>`; s.appendChild(d); return d; };
+  const champ = (parent,label,valeur,oninput,hint) => {
+    const w = document.createElement("div"); w.className="f";
+    w.innerHTML = `<label>${label}</label>`;
+    const i = document.createElement("input"); i.type="text"; i.value = valeur ?? "";
+    i.addEventListener("input", ()=>oninput(i.value));
+    w.appendChild(i);
+    if(hint) w.insertAdjacentHTML("beforeend", `<div class="hint">${hint}</div>`);
+    parent.appendChild(w); return i;
+  };
+
+  // --- type + identité ---
+  const a = sec("Champ");
+  const wt = document.createElement("div"); wt.className="f";
+  wt.innerHTML = `<label>Type</label>`;
+  const st = document.createElement("select");
+  TYPES.forEach(([v,l]) => { const o=document.createElement("option"); o.value=v; o.textContent=l;
+    if(v===t) o.selected=true; st.appendChild(o); });
+  if(!TYPES.some(x=>x[0]===t)){ const o=document.createElement("option"); o.value=t;
+    o.textContent=t+" (non représenté)"; o.selected=true; st.appendChild(o); }
+  st.addEventListener("change", ()=>{ memorise(); set_(f,"FieldType",st.value); dessine(); panneau(); });
+  wt.appendChild(st); a.appendChild(wt);
+
+  champ(a,"Nom technique",get(f,"Name"),v=>{ set_(f,"Name",v); dessine(); majVar(); });
+  const wv = document.createElement("div"); wv.className="f";
+  wv.innerHTML = `<label>Variable d'impression</label><span class="var" id="vvar"></span>`;
+  a.appendChild(wv);
+  const majVar = () => { const e=$("vvar"); if(e) e.textContent =
+    get(f,"IsMacroable")==="true" ? `{${get(f,"Name")}${doc_.name||"…"}Observation}` : "— non exposé à l'impression"; };
+  majVar();
+
+  champ(a,"Libellé",get(f,"Label"),v=>{ set_(f,"Label",v); dessine(); });
+
+  // --- spécifique au type ---
+  if(AVEC_OPTIONS.has(t)){
+    const b = sec("Réponses et scores");
+    const liste = litOptions(get(f,"Comment"));
+    liste.forEach((o,j) => {
+      const r = document.createElement("div"); r.className="opt";
+      const li=document.createElement("input"); li.type="text"; li.value=o.l; li.placeholder="Libellé";
+      const vi=document.createElement("input"); vi.type="text"; vi.value=o.v; vi.placeholder="0";
+      const rm=document.createElement("button"); rm.className="del mini"; rm.textContent="×";
+      li.addEventListener("input",()=>{ liste[j].l=li.value; set_(f,"Comment",ecritOptions(liste)); dessine(); });
+      vi.addEventListener("input",()=>{ liste[j].v=vi.value; set_(f,"Comment",ecritOptions(liste)); dessine(); });
+      rm.addEventListener("click",()=>{ memorise(); liste.splice(j,1); set_(f,"Comment",ecritOptions(liste)); dessine(); panneau(); });
+      r.append(li,vi,rm); b.appendChild(r);
+    });
+    const add=document.createElement("button"); add.className="mini"; add.textContent="+ Réponse";
+    add.addEventListener("click",()=>{ memorise(); liste.push({l:"",v:String(liste.length)});
+      set_(f,"Comment",ecritOptions(liste)); dessine(); panneau(); });
+    b.appendChild(add);
+  }
+  else if(t === "READONLY_LABEL"){
+    const b = sec("Style");
+    const w=document.createElement("div"); w.className="f";
+    const ss=document.createElement("select");
+    STYLES.forEach(v=>{ const o=document.createElement("option"); o.value=v;
+      o.textContent = v===""?"(aucun)":v; if(v===(get(f,"Comment")||"")) o.selected=true; ss.appendChild(o); });
+    ss.addEventListener("change",()=>{ set_(f,"Comment",ss.value); dessine(); });
+    w.appendChild(ss); b.appendChild(w);
+  }
+  else if(t === "MEASURE"){
+    const b = sec("Mesure");
+    const [nom,unite] = (get(f,"Comment")||"").split("|");
+    let N=nom||"", U=unite||"";
+    const lib = chargeMesures();
+    let iu;
+    const iN = champ(b,"Nom exact dans la base DrSanté",N,v=>{
+      if(v.includes("|")){
+        // Choix dans la liste : la valeur porte le couple « nom|unité ».
+        const k = v.lastIndexOf("|");
+        N = v.slice(0,k); U = v.slice(k+1);
+        iN.value = N; iu.value = U;
+      } else {
+        N = v;
+      }
+      set_(f,"Comment",`${N}|${U}`); dessine(); majEtat();
+    });
+    iN.setAttribute("list","listeMesures");
+    iN.placeholder = "Tape pour chercher : créat, TSH, glycémie…";
+    iu = champ(b,"Unité",U,v=>{ U=v; set_(f,"Comment",`${N}|${U}`); dessine(); majEtat(); });
+
+    const etat = document.createElement("div"); etat.className = "hint";
+    const attention = t => `<span style="color:var(--warn)">${t}</span>`;
+    const majEtat = () => {
+      const l = chargeMesures();
+      if(!N){ etat.innerHTML = `${l.length} mesures dans la bibliothèque. Tape pour chercher.`; return; }
+      const exacte = l.find(m => m.nom === N && (m.unite||"") === U);
+      const autres = l.filter(m => m.nom === N && (m.unite||"") !== U);
+      const variante = m => `<b>${esc(m.unite || "(aucune)")}</b>${m.n !== undefined ? " — " + esc(fmtUsage(m)) : ""}`;
+      if(exacte){
+        etat.innerHTML = `✓ Présente dans la base, avec cette unité.` +
+          (exacte.n !== undefined ? `<br>${esc(fmtUsage(exacte))}` : "") +
+          (autres.length ? `<br>Ce nom existe aussi en : ${autres.map(variante).join(" · ")}` : "");
+        return;
+      }
+      if(autres.length){
+        etat.innerHTML = attention(`⚠ Ce nom existe, mais avec une autre unité : ${autres.map(variante).join(" · ")}.`);
+        return;
+      }
+      // À casse/espaces près : on privilégie la variante qui a la même unité.
+      const pareil = m => m.nom.trim().toLowerCase() === N.trim().toLowerCase();
+      const proche = l.find(m => pareil(m) && (m.unite||"").toLowerCase() === U.toLowerCase()) || l.find(pareil);
+      if(proche){
+        etat.innerHTML = attention(`≈ Proche de « ${esc(proche.nom)} » (${esc(proche.unite || "sans unité")}${proche.n !== undefined ? " — " + esc(fmtUsage(proche)) : ""}) : casse ou espaces différents. DrSanté compare peut-être le libellé exact.`);
+        return;
+      }
+      etat.innerHTML = attention(`⚠ Absente de la base : DrSanté ne fera pas le lien.`);
+    };
+    majEtat();
+    b.insertBefore(etat, iN.parentElement.nextSibling);
+
+    const bl = document.createElement("button"); bl.className = "mini";
+    bl.textContent = "Coller la liste de la base…";
+    bl.addEventListener("click", ouvreBibliotheque);
+    b.appendChild(bl);
+  }
+  else if(t === "NUMERICBOX"){
+    const b = sec("Calcul");
+    champ(b,"Formule",get(f,"Formula")||"",v=>{ v ? set_(f,"Formula",v) : del_(f,"Formula"); dessine(); },
+      "Référence les autres champs par leur nom : <code>{R1}+{R2}+{R3}</code>");
+    const add=document.createElement("button"); add.className="mini";
+    add.textContent="Somme de toutes les questions";
+    add.addEventListener("click",()=>{
+      const q = doc_.fields.filter(x=>get(x,"FieldType")==="RADIOGROUP").map(x=>`{${get(x,"Name")}}`);
+      set_(f,"Formula",q.join("+")); dessine(); panneau();
+    });
+    b.appendChild(add);
+  }
+
+  // --- position ---
+  const c = sec("Position");
+  const r4 = document.createElement("div"); r4.className="row4";
+  [["XLocation","Col."],["YLocation","Ligne"],["Width","Larg."],["Height","Haut."]].forEach(([k,l])=>{
+    const w=document.createElement("div");
+    w.innerHTML=`<label>${l}</label>`;
+    const i=document.createElement("input"); i.type="text"; i.value=get(f,k);
+    i.addEventListener("input",()=>{ set_(f,k,String(parseInt(i.value,10)||0)); dessine(); });
+    w.appendChild(i); r4.appendChild(w);
+  });
+  c.appendChild(r4);
+
+  const wm=document.createElement("div"); wm.className="f"; wm.style.marginTop="8px";
+  const lm=document.createElement("label"); lm.style.display="flex"; lm.style.alignItems="center"; lm.style.gap="7px";
+  const cm=document.createElement("input"); cm.type="checkbox"; cm.style.width="auto";
+  cm.checked = get(f,"IsMacroable")==="true";
+  cm.addEventListener("change",()=>{ set_(f,"IsMacroable", cm.checked?"true":"false"); majVar(); });
+  lm.append(cm, document.createTextNode("Disponible à l'impression"));
+  wm.appendChild(lm); c.appendChild(wm);
+
+  const d = sec("");
+  d.style.display = "flex"; d.style.gap = "8px"; d.style.flexWrap = "wrap";
+  const dup=document.createElement("button"); dup.textContent="Dupliquer ce champ"; dup.title="Ctrl+D";
+  dup.addEventListener("click",()=> dupliquerChamp(sel));
+  const sup=document.createElement("button"); sup.className="del"; sup.textContent="Supprimer ce champ";
+  sup.addEventListener("click",()=>{ memorise(); doc_.fields.splice(sel,1); sel=null; dessine(); panneau(); });
+  d.append(dup, sup);
+}
+
+/* ==========================================================================
+   Fichiers
+   ========================================================================== */
+
+function nomFichier(){
+  const p = (doc_.label||"observation").normalize("NFD").replace(/[̀-ͯ]/g,"")
+    .replace(/[^A-Za-z0-9]+/g,"").slice(0,60) || "observation";
+  return `TEMPLATE_CUSTOBS_${p}.xml`;
+}
+
+function exporter(){
+  const pb = controles();
+  if(pb.length && !confirm("Problèmes détectés :\n\n• " + pb.join("\n• ") + "\n\nExporter quand même ?")) return;
+  if(doc_.identifiantsImportes && !confirm(
+    "Ce formulaire garde les identifiants du fichier importé.\n\n" +
+    "Réimporté dans DrSanté, il pourrait REMPLACER le formulaire d'origine.\n" +
+    "Pour créer une nouvelle version à côté de l'original, annule et clique « Nouvelle version ».\n\n" +
+    "Exporter quand même avec les identifiants d'origine ?")) return;
+  retientHabitudes(doc_.label, doc_.author);
+  const blob = new Blob([new TextEncoder().encode(versXml())],{type:"application/xml;charset=utf-8"});
+  const u = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href=u; a.download=nomFichier();
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),2000);
+}
+
+/* ==========================================================================
+   Événements
+   ========================================================================== */
+
+$("dLabel").addEventListener("input", e=>{ doc_.label = e.target.value; });
+$("dName").addEventListener("input", e=>{ doc_.name = e.target.value; panneau(); });
+$("dAuthor").addEventListener("input", e=>{ doc_.author = e.target.value; });
+
+/** « Généraliste v2 » → « Généraliste v3 », « FAGERSTROMv33 » → « FAGERSTROMv34 ».
+    Sans numéro : on ajoute v2. */
+function versionSuivante(s, suffixe){
+  const m = String(s || "").match(/^(.*?)([vV])(\d+)(\s*)$/);
+  if(m) return m[1] + m[2] + (parseInt(m[3], 10) + 1) + m[4];
+  return String(s || "Observation").trim() + suffixe;
+}
+
+$("bDup").addEventListener("click", ()=>{
+  memorise();
+  const avant = doc_.label;
+  doc_.identifier = uuid();
+  doc_.backupIdentifier = uuid();
+  doc_.identifiantsImportes = false;
+  doc_.label = versionSuivante(doc_.label, " v2");
+  doc_.name = versionSuivante(doc_.name, "V2");
+  majEntete(); dessine(); panneau();
+  const impression = (doc_.rootOrder || []).some(e => e.raw !== undefined);
+  message(`« ${avant} » → « ${doc_.label} ». ` + (impression
+    ? "Attention : son modèle d'impression utilise encore l'ancien nom technique, ses variables ne se rempliront pas."
+    : "Nouveaux identifiants : l'original ne sera pas remplacé."));
+});
+
+let minuterieMsg = null;
+function message(texte){
+  $("msg").textContent = texte;
+  clearTimeout(minuterieMsg);
+  minuterieMsg = setTimeout(()=>{ $("msg").textContent = ""; }, 9000);
+}
+$("bAdd").addEventListener("click", ()=> ajouter(1, nbLignes()));
+$("bTab").addEventListener("click", ()=> basculeModeTab(!modeTab.actif));
+$("bNew").addEventListener("click", ()=>{
+  if(doc_.fields.length && !confirm("Repartir d'un nouveau formulaire ? Les modifications non exportées seront perdues.")) return;
+  pileAnnuler.length = 0; pileRetablir.length = 0;
+  doc_ = vide();
+  // Reprise de l'auteur et du préfixe de libellé du dernier formulaire, pour
+  // ne pas les retaper. Rien n'est écrit en dur : tout vient de tes fiches.
+  const h = habitudes();
+  doc_.label = h.prefixe || "";
+  doc_.author = h.auteur || "";
+  doc_.fields = enTeteStandard();
+  sel = null; majEntete(); dessine(); panneau();
+  $("dLabel").focus();
+  $("dLabel").setSelectionRange(doc_.label.length, doc_.label.length);
+  message("Nouveau formulaire, avec l'en-tête standard : icône, patient, auteur, date, titre.");
+});
+$("bImp").addEventListener("click", ()=> $("file").click());
+$("file").addEventListener("change", async e=>{
+  const f = e.target.files[0]; if(!f) return;
+  try{ doc_ = importer(await f.text()); pileAnnuler.length = 0; pileRetablir.length = 0;
+       sel=null; majEntete(); dessine(); panneau(); }
+  catch(err){ alert("Import impossible : "+err.message); }
+  e.target.value = "";
+});
+$("bExp").addEventListener("click", exporter);
+document.addEventListener("keydown", e=>{
+  const enSaisie = ["INPUT","TEXTAREA","SELECT"].includes(document.activeElement.tagName);
+  const ctrl = e.ctrlKey || e.metaKey;
+  // Dans un champ de saisie, on laisse le navigateur gérer Ctrl+Z (annuler la frappe).
+  if(ctrl && !enSaisie && e.key.toLowerCase() === "z" && !e.shiftKey){ e.preventDefault(); annuler(); return; }
+  if(ctrl && !enSaisie && (e.key.toLowerCase() === "y" || (e.key.toLowerCase() === "z" && e.shiftKey))){ e.preventDefault(); retablir(); return; }
+  if(ctrl && e.key.toLowerCase() === "d"){ e.preventDefault(); dupliquerChamp(sel); return; }
+  if(e.key === "Delete" && sel !== null && !enSaisie){
+    memorise(); doc_.fields.splice(sel,1); sel=null; dessine(); panneau();
+  }
+  if(e.key === "Escape"){ if(modeTab.actif){ basculeModeTab(false); return; } sel=null; dessine(); panneau(); }
+});
+// Entrer dans une zone de saisie = début d'une modification : on mémorise l'état.
+document.addEventListener("focusin", e=>{
+  if(["INPUT","TEXTAREA","SELECT"].includes(e.target.tagName) && !e.target.closest("dialog")) memorise();
+});
+
+function ouvreBibliotheque(){
+  const d = $("dlgLib");
+  $("libTexte").value = "";
+  $("libInfo").textContent = `${chargeMesures().length} mesures actuellement dans la bibliothèque.`;
+  d.showModal();
+}
+$("libAjouter").addEventListener("click", ()=>{
+  const l = lisListeCollee($("libTexte").value);
+  const n = ajouteMesures(l);
+  majListeMesures(); $("dlgLib").close(); panneau();
+  message(`${l.length} lignes lues, ${n} nouvelle(s) mesure(s) ajoutée(s).`);
+});
+$("libRemplacer").addEventListener("click", ()=>{
+  const l = lisListeCollee($("libTexte").value);
+  if(!l.length){ alert("Rien à importer : colle d'abord la liste."); return; }
+  if(!confirm(`Remplacer toute la bibliothèque par ces ${l.length} mesures ?`)) return;
+  sauveMesures(l); marqueSourceBase(); majListeMesures(); $("dlgLib").close(); panneau();
+  message(`Bibliothèque remplacée : ${l.length} mesures, issues de la base.`);
+});
+$("libFermer").addEventListener("click", ()=> $("dlgLib").close());
+
+function majEntete(){ $("dLabel").value = doc_.label; $("dName").value = doc_.name; $("dAuthor").value = doc_.author; }
+
+majEntete(); majListeMesures(); dessine(); panneau();
+</script>
+</body>
+</html>
