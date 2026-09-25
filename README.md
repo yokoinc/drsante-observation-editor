@@ -5,6 +5,35 @@ cabinet médical, au format d'export `TEMPLATE_CUSTOBS` de DrSanté.
 
 Projet indépendant. Aucun lien avec Calimaps, l'éditeur de DrSanté.
 
+## ⚠️ Expérimental, et dangereux
+
+**Ce dépôt est un exemple, une proposition d'éditeur.** Il montre qu'un tel
+outil est possible et à quoi il pourrait ressembler. Ce n'est pas un logiciel
+fini, ce n'est pas un produit, et personne ne le maintient pour vous.
+
+Ce qu'il touche n'est pas anodin : les fiches d'observation d'un **logiciel
+médical**, dans lequel sont enregistrées des consultations de patients.
+
+- **Le format n'est pas documenté par l'éditeur du logiciel.** Il a été
+  reconstitué en observant des fichiers exportés. Rien ne garantit qu'il soit
+  complet, ni qu'il le reste à la prochaine version de DrSanté.
+- **Un import peut remplacer une fiche existante.** Si le fichier garde les
+  identifiants d'origine, la fiche en service est écrasée.
+- **Un import peut décaler les valeurs d'observations déjà remplies.** Elles
+  sont rattachées au *numéro* de leur champ : ajouter, supprimer ou réordonner
+  des champs d'une fiche existante fait afficher une valeur dans la mauvaise
+  case — un résultat à la place d'un autre, dans un dossier patient.
+- **Il n'y a pas de bouton « annuler » dans le logiciel** après un import.
+- **Aucune garantie d'aucune sorte**, comme le dit la licence MIT. Vous êtes
+  seul responsable de ce que vous importez dans votre base.
+
+Si vous l'essayez malgré tout : **sauvegarde de la base avant**, essai sur une
+fiche de test, jamais directement sur une fiche utilisée en consultation, et
+toujours par « Nouvelle version » plutôt qu'en écrasant l'originale.
+
+L'éditeur, lui, ne touche à rien : il lit et écrit des fichiers XML dans votre
+navigateur. Tout le risque est dans ce que vous importez ensuite.
+
 ## Ce que c'est
 
 **Un seul fichier HTML.** Pas d'installation, pas de serveur, pas de compte :
