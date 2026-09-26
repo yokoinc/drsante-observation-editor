@@ -67,6 +67,7 @@
   .fld .rang{position:absolute;top:2px;right:3px;background:var(--ink3);color:#fff;border-radius:9px;
     font-size:10.5px;font-weight:700;padding:0 6px;line-height:16px;font-variant-numeric:tabular-nums}
   .fld .rang.fait{background:var(--accent)}
+  .fld .rang.muet{background:transparent;color:var(--ink3);box-shadow:none;font-weight:400}
   .mode-tab .fld{cursor:pointer}
   .mode-tab .cell{cursor:default}
   .mode-tab .cell:hover{background:#fafcfd;border-color:#e3eaef}
@@ -776,7 +777,9 @@ function bloc(f,i){
     (lab ? `<div class="fl">${esc(lab)}</div>` : "") +
     (bas ? `<div class="opts">${esc(bas)}</div>` : "") +
     (modeTab.actif
-      ? `<div class="rang${i <= modeTab.dernier ? " fait" : ""}">${i+1}</div>`
+      ? (rangTab(i) === null
+          ? `<div class="rang muet" title="Tab ne s'arrête pas sur ce champ">·</div>`
+          : `<div class="rang${i <= modeTab.dernier ? " fait" : ""}">${rangTab(i)}</div>`)
       : `<div class="hdl" title="Redimensionner"></div>`);
 
   if(modeTab.actif) d.addEventListener("click", e => { e.stopPropagation(); placeEnSuivant(i); });
@@ -793,6 +796,18 @@ function bloc(f,i){
    ========================================================================== */
 
 const modeTab = { actif:false, dernier:-1 };   // dernier = rang du dernier champ cliqué
+
+/* DrSanté numérote TOUS les champs, libellés compris, en une suite continue :
+   c'est ce qu'on écrit dans le fichier. Mais la touche Tab ne s'arrête que sur
+   les champs de saisie — les seuls qu'on numérote à l'écran. */
+const SANS_CURSEUR = new Set(["READONLY_LABEL","READONLY_ICON","READONLY_PATIENTNAME"]);
+
+function rangTab(i){
+  if(SANS_CURSEUR.has(get(doc_.fields[i],"FieldType"))) return null;
+  let n = 0;
+  for(let j=0;j<=i;j++) if(!SANS_CURSEUR.has(get(doc_.fields[j],"FieldType"))) n++;
+  return n;
+}
 
 function basculeModeTab(actif){
   modeTab.actif = actif; modeTab.dernier = -1;
