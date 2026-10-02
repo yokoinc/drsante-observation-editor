@@ -546,6 +546,10 @@ function importer(texte){
   d.fields = [...r.querySelectorAll("Fields > ObservationFormatFieldExport")].map(n => ({
     el: [...n.children].map(c => ({ k: c.nodeName, v: c.textContent }))
   }));
+  // Ordre d'origine des champs : vérifié le 2026-10-03, DrSanté conserve la
+  // numérotation de la fiche existante quand on réimporte par-dessus. Un ordre
+  // de tabulation modifié n'est donc repris que par une nouvelle fiche.
+  d.ordreImporte = d.fields.map(f => f.el.find(e => e.k === "Name")?.v ?? "").join("|");
 
   // Ordre des éléments racine. Tout ce que l'éditeur ne modélise pas — au
   // premier chef le modèle d'impression embarqué (ObservationPrintTemplateExport,
@@ -617,13 +621,28 @@ function nbLignes(){
   return Math.max(1, ...doc_.fields.map(f => num(f,"YLocation") + num(f,"Height")));
 }
 
+/** Lignes de la grille réellement occupées par un champ. */
+function lignesOccupees(){
+  const s = new Set();
+  doc_.fields.forEach(f => {
+    const y = num(f,"YLocation"), h = Math.max(1, num(f,"Height"));
+    for(let i=y;i<y+h;i++) s.add(i);
+  });
+  return s;
+}
+
 function xaml(){
   const lignes = nbLignes();
   // On garde la grille d'origine tant qu'elle est assez grande : des lignes en
   // trop sont sans effet, alors qu'en régénérer une ferait diverger le fichier.
   // Les sauts de ligne sont réécrits en CRLF : tout lecteur XML les normalise
   // en LF à la lecture, alors que DrSanté les écrit en CRLF.
-  if(doc_.xamlOrigine && doc_.lignesOrigine >= lignes) return crlf(doc_.xamlOrigine);
+  const occ = lignesOccupees();
+  let toutesPleines = true;
+  for(let y=0;y<lignes;y++) if(!occ.has(y)){ toutesPleines = false; break; }
+  // Grille d'origine conservée tant qu'aucune ligne n'est laissée vide : sinon
+  // il faut la régénérer pour donner une hauteur fixe aux lignes d'espacement.
+  if(doc_.xamlOrigine && doc_.lignesOrigine >= lignes && toutesPleines) return crlf(doc_.xamlOrigine);
   return [
     `<ItemsPanelTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'>`,
     `<Grid xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">`,
@@ -631,7 +650,10 @@ function xaml(){
     ...doc_.cols.map(w=>`<ColumnDefinition Width="${w}" />`),
     `</Grid.ColumnDefinitions>`,
     `<Grid.RowDefinitions>`,
-    ...Array.from({length:lignes},()=>`<RowDefinition Height="Auto" />`),
+    // Une ligne sans champ garde une hauteur fixe : c'est ce qui aère la fiche.
+    // En « Auto », elle se réduirait à rien et l'espace disparaîtrait.
+    ...Array.from({length:lignes},(_,y)=>
+      `<RowDefinition Height="${lignesOccupees().has(y) ? "Auto" : "18"}" />`),
     `</Grid.RowDefinitions>`,
     `</Grid>`,
     `</ItemsPanelTemplate>`
@@ -1174,6 +1196,13 @@ function exporter(){
     "Réimporté dans DrSanté, il pourrait REMPLACER le formulaire d'origine.\n" +
     "Pour créer une nouvelle version à côté de l'original, annule et clique « Nouvelle version ».\n\n" +
     "Exporter quand même avec les identifiants d'origine ?")) return;
+  const ordreActuel = doc_.fields.map(f => get(f,"Name")).join("|");
+  if(doc_.identifiantsImportes && doc_.ordreImporte && ordreActuel !== doc_.ordreImporte && !confirm(
+    "L'ordre des champs a changé — donc l'ordre de la touche Tab.\n\n" +
+    "Réimportée par-dessus la fiche d'origine, DrSanté GARDE la numérotation existante :\n" +
+    "ton nouvel ordre sera ignoré.\n\n" +
+    "Pour qu'il soit pris en compte, annule et clique « Nouvelle version ».\n\n" +
+    "Exporter quand même ?")) return;
   retientHabitudes(doc_.label, doc_.author);
   const blob = new Blob([new TextEncoder().encode(versXml())],{type:"application/xml;charset=utf-8"});
   const u = URL.createObjectURL(blob);
